@@ -80,9 +80,11 @@ const Dashboard = () => {
   const [editIndex, setEditIndex] = useState(null);
   const [lowWaterAlertOpen, setLowWaterAlertOpen] = useState(false);
   const [planExpiryAlertOpen, setPlanExpiryAlertOpen] = useState(false);
-  const [daysLeft, setDaysLeft] = useState(0);
+  const [daysLeft, setDaysLeft] = useState(null);
+  const [lowWaterDialogOpen, setLowWaterDialogOpen] = useState(false);
   const [remainingLiters, setRemainingLiters] = useState(0);
   const [showExpiryReminder, setShowExpiryReminder] = useState(false);
+
 
 
 const handleSaveReminder = () => {
@@ -196,35 +198,44 @@ useEffect(() => {
         const planEndDate = latestPlan?.end_date;
 
         // Low water alert logic
-        const remaining = waterLimit - totalConsumed;
-        console.log("Remaining water:", remaining, "L");
-        
-        if (remaining <= 10) {
-          setRemainingLiters(remaining);
-          sendLowWaterNotification(remaining);
-          
-          const now = new Date();
-          if (!lastEmailSent || (now - new Date(lastEmailSent)) > 24 * 60 * 60 * 1000) {
-            sendLowWaterEmail(user_mail, remaining);
-            setLastEmailSent(now.toISOString());
-            console.log("Low water email sent at:", now.toISOString());
-          } else {
-            console.log("Email already sent recently. Next email available after 24 hours.");
-          }
-        }
+       const remaining = waterLimit - totalConsumed;
+console.log("Remaining water:", remaining, "L");
 
-        // Plan expiry logic
-        if (latestPlan?.end_date) {
-          const today = new Date();
-          const expiry = new Date(latestPlan.end_date);
-          const diffTime = expiry.getTime() - today.getTime();
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+if (remaining <= 10) {
+  setRemainingLiters(remaining);
+  setLowWaterDialogOpen(true);
 
-          if (diffDays <= 3 && diffDays >= 0) {
-            setDaysLeft(diffDays);
-            setShowExpiryReminder(true);
-          }
-        }
+  const now = new Date();
+  if (!lastEmailSent || (now - new Date(lastEmailSent)) > 24 * 60 * 60 * 1000) {
+    sendLowWaterEmail(user_mail, remaining);
+    setLastEmailSent(now.toISOString());
+
+  }
+}
+
+// Plan expiry logic//
+
+// ⏳ TEMPORARY FAKE EXPIRY DATE — 2 days from now
+
+if (latestPlan) {
+  latestPlan.end_date = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+}
+ 
+if (latestPlan?.end_date) {
+  const today = new Date();
+  const expiry = new Date(latestPlan.end_date);
+  const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+
+ console.log("🧪 Fake expiry date:", expiry.toLocaleDateString("en-US"));
+  console.log("🕒 Days left (for reminder):", diffDays);
+ 
+
+  if (diffDays <= 3 && diffDays >= 0) {
+    setDaysLeft(diffDays); 
+    setShowExpiryReminder(true);
+  }
+}
+
 
         // Set user data with raw values (units will be added in UI)
         setUserData({
@@ -258,7 +269,7 @@ useEffect(() => {
         console.error("Failed to fetch user details:", error);
       });
   }
-}, [userId, lastEmailSent]);
+}, [userId, lastEmailSent,]);
 
 // Helper functions
 const getTankStatus = (code) => {
@@ -292,23 +303,7 @@ const getWaterQuality = (code) => {
   return qualityMap[code] || "Unknown";
 };
 
-const sendLowWaterNotification = (remaining) => {
-  if (Notification.permission === "granted") {
-    new Notification("⚠️ Low Water Alert", {
-      body: `Only ${remaining}L of water left in your plan.`,
-      icon: "/low-water.png",
-    });
-  } else if (Notification.permission !== "denied") {
-    Notification.requestPermission().then((permission) => {
-      if (permission === "granted") {
-        new Notification("⚠️ Low Water Alert", {
-          body: `Only ${remaining}L of water left in your plan.`,
-          icon: "/low-water.png",
-        });
-      }
-    });
-  }
-};
+
 
 const sendLowWaterEmail = async (email, remainingLiters) => {
   try {
@@ -324,17 +319,10 @@ const sendLowWaterEmail = async (email, remainingLiters) => {
     console.log("✅ Email sent. Response:", response.data);
   } catch (error) {
     console.error("❌ Failed to send email:", error);
-    if (error.response) {
-      console.error("Response data:", error.response.data);
-      console.error("Response status:", error.response.status);
-      console.error("Response headers:", error.response.headers);
-    } else if (error.request) {
-      console.error("No response received:", error.request);
-    } else {
-      console.error("Error setting up request:", error.message);
-    }
   }
 };
+
+
 
 
   // Plan details
@@ -346,9 +334,11 @@ const currentPlan = {
   startDate: userData?.user_data?.planStartDate
     ? new Date(userData.user_data.planStartDate).toLocaleDateString()
     : "N/A",
- expiryDate: userData?.user_data?.planEndDate
+expiryDate: userData?.user_data?.planEndDate
     ? new Date(userData.user_data.planEndDate).toLocaleDateString()
     : "N/A"
+
+
 };
 
   const availablePlans = [
@@ -358,9 +348,6 @@ const currentPlan = {
   ];
 
  
-
-
-
   //useEffect(() => {
     // Calculate glass fill percentage based on water intake
     //setGlassFill(Math.min((waterIntake / 2000) * 100, 100));
@@ -503,7 +490,8 @@ case 'recharge':
               <Typography variant="body2"><strong>Water Limit:</strong> {item.water_limit}</Typography>
               <Typography variant="body2"><strong>Product Version:</strong> {item.prod_version}</Typography>
               <Typography variant="body2"><strong>Start Date:</strong> {new Date(item.start_date).toLocaleDateString()}</Typography>
-              <Typography variant="body2"><strong>End Date:</strong> {new Date(item.end_date).toLocaleDateString()}</Typography>
+            <Typography variant="body2"><strong>End Date:</strong> {new Date(item.end_date).toLocaleDateString()}</Typography>
+
 
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
               <Button
@@ -1013,7 +1001,7 @@ case 'subscription':
 
 <Dialog
   open={showExpiryReminder}
-  onClose={() => {}} // disables backdrop close
+  onClose={() => setShowExpiryReminder(false)}
   disableEscapeKeyDown
   PaperProps={{
     sx: { borderRadius: 2, p: 2, minWidth: 320 }
@@ -1036,6 +1024,7 @@ case 'subscription':
     </Button>
   </DialogActions>
 </Dialog>
+
 
 
 
@@ -1204,6 +1193,35 @@ case 'subscription':
       </Card>
     </motion.div>
   </Grid>
+
+<Dialog
+  open={lowWaterDialogOpen}
+  onClose={() => {}} // disables backdrop close
+  disableEscapeKeyDown
+  PaperProps={{
+    sx: { borderRadius: 2, p: 2, minWidth: 320 }
+  }}
+>
+  <DialogTitle sx={{ color: "#d32f2f", fontWeight: 'bold' }}>
+    🚱 Low Water Alert
+  </DialogTitle>
+  <DialogContent sx={{ color: "#333", fontSize: "16px" }}>
+    Only {remainingLiters} liter(s) of water remaining.<br />
+    Please recharge your plan soon to avoid service disruption.
+  </DialogContent>
+  <DialogActions>
+    <Button 
+      variant="contained" 
+      color="error" 
+      onClick={() => setLowWaterDialogOpen(false)}
+    >
+      Close
+    </Button>
+  </DialogActions>
+</Dialog>
+
+
+
 
   {/* Water Quality - Right aligned on mobile */}
   <Grid item xs={12} sm={6} md={4} sx={{ display: 'flex', justifyContent: { xs: 'flex-end', sm: 'center' } }}>
