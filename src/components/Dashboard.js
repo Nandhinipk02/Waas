@@ -84,6 +84,8 @@ const Dashboard = () => {
   const [lowWaterDialogOpen, setLowWaterDialogOpen] = useState(false);
   const [remainingLiters, setRemainingLiters] = useState(0);
   const [showExpiryReminder, setShowExpiryReminder] = useState(false);
+  const [showFilterDetails, setShowFilterDetails] = useState(false);
+
 
 
 
@@ -226,8 +228,7 @@ if (latestPlan?.end_date) {
   const expiry = new Date(latestPlan.end_date);
   const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
 
- console.log("🧪 Fake expiry date:", expiry.toLocaleDateString("en-US"));
-  console.log("🕒 Days left (for reminder):", diffDays);
+ 
  
 
   if (diffDays <= 3 && diffDays >= 0) {
@@ -253,6 +254,8 @@ if (latestPlan?.end_date) {
             last_updated: bleData.local_time || "--",
             filter_life: calculateFilterHealth(bleData.filter_life),
             water_quality: getWaterQuality(bleData.water_quality_status),
+
+            
             // Plan details
             planName: latestPlan?.plan_name || "No Plan",
             planModel: latestPlan?.prod_version || "N/A",
@@ -284,14 +287,21 @@ const getTankStatus = (code) => {
 };
 
 const calculateFilterHealth = (hexValue) => {
-  if (!hexValue) return "0%";
+  if (!hexValue || hexValue.length < 12) return [];
+
   try {
-    const percent = parseInt(hexValue.substring(0, 2), 16) / 255 * 100;
-    return `${Math.round(percent)}%`;
+    const percentages = [];
+    for (let i = 0; i < 12; i += 2) {
+      const hex = hexValue.substring(i, i + 2);
+      const percent = parseInt(hex, 16) / 255 * 100;
+      percentages.push(Math.round(percent));
+    }
+    return percentages;
   } catch {
-    return "0%";
+    return [];
   }
 };
+
 
 const getWaterQuality = (code) => {
   const qualityMap = {
@@ -1078,49 +1088,90 @@ case 'subscription':
 
 <Grid container spacing={3} justifyContent="center" sx={{ mb: 3 }}>
   {/* Filter Health - Left aligned on mobile */}
-  <Grid item xs={12} sm={6} md={4} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', sm: 'center' } }}>
-    <motion.div whileHover={{ scale: 1.03 }}>
-      <Card sx={{ borderRadius: 2, p: 2, minHeight: 100, width: "85%", display: "flex", flexDirection: "column", justifyContent: "space-between", background: "white", boxShadow: "0 4px 12px rgba(0, 86, 179, 0.1)" }}>
-        <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-          <FilterIcon sx={{ color: "#0056b3", mr: 1 }} />
-          <Typography variant="subtitle2">Filter Health</Typography>
-        </Box>
-        {(() => {
-          const filterStr = userData?.user_data?.filter_life ?? "0%";
-          const percentage = parseInt(filterStr.replace("%", ""), 10) || 0;
-          let statusLabel = "Poor";
-          let barColor = "#f44336";
-          if (percentage >= 80) {
-            statusLabel = "Excellent";
-            barColor = "#4caf50";
-          } else if (percentage >= 50) {
-            statusLabel = "Good";
-            barColor = "#ff9800";
-          }
-          return (
-            <>
+  <Grid item xs={12} sm={6} md={4}>
+  <motion.div whileHover={{ scale: 1.03 }}>
+    <Card
+      onClick={() => setShowFilterDetails(prev => !prev)}
+      sx={{
+        cursor: 'pointer',
+        borderRadius: 2,
+        p: 2,
+        minHeight: 100,
+        width: "85%",
+        background: "white",
+        boxShadow: "0 4px 12px rgba(0, 86, 179, 0.1)"
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+        <FilterIcon sx={{ color: "#0056b3", mr: 1 }} />
+        <Typography variant="subtitle2">Filter Health</Typography>
+      </Box>
+
+      <Box sx={{ mb:3}}/>
+
+      {!showFilterDetails ? (() => {
+        const avg = Math.round(
+          (userData?.user_data?.filter_life?.reduce((a, b) => a + b, 0) || 0) /
+          (userData?.user_data?.filter_life?.length || 1)
+        );
+     let statusLabel = "Poor";
+let barColor = "#f44336";
+if (avg >= 80) {
+  statusLabel = "Excellent";
+  barColor = "#4caf50";
+} else if (avg >= 45) { 
+  statusLabel = "Good";
+  barColor = "#ff9800";
+}
+
+
+        return (
+          <>
+            <LinearProgress
+              variant="determinate"
+              value={avg}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                mb:4,
+                backgroundColor: "#e3f2fd",
+                "& .MuiLinearProgress-bar": {
+                  backgroundColor: barColor,
+                },
+              }}
+            />
+            <Typography variant="body2" sx={{ color: barColor, fontWeight: "bold" }}>
+              {statusLabel} ({avg}%)
+            </Typography>
+          </>
+        );
+      })() : (
+        <>
+          {["Sediment Filter", "Carbon Filter", "RO Filter", "Copper Value Filter", "Alkaline Filter", "Mineral Filter"].map((label, index) => (
+            <Box key={label} sx={{ mb: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: "bold" }}>
+                {label}: {userData?.user_data?.filter_life?.[index] ?? 0}%
+              </Typography>
               <LinearProgress
                 variant="determinate"
-                value={percentage}
+                value={userData?.user_data?.filter_life?.[index] ?? 0}
                 sx={{
-                  height: 6,
-                  borderRadius: 3,
-                  mb: 1,
-                  backgroundColor: "#e3f2fd",
+                  height: 5,
+                  borderRadius: 2,
+                  backgroundColor: "#e0e0e0",
                   "& .MuiLinearProgress-bar": {
-                    backgroundColor: barColor,
-                  },
+                    backgroundColor: "#1976d2"
+                  }
                 }}
               />
-              <Typography variant="body2" sx={{ color: barColor, fontWeight: "bold" }}>
-                {statusLabel} ({percentage}%)
-              </Typography>
-            </>
-          );
-        })()}
-      </Card>
-    </motion.div>
-  </Grid>
+            </Box>
+          ))}
+        </>
+      )}
+    </Card>
+  </motion.div>
+</Grid>
+
 
   {/* Water Temperature - Right aligned on mobile */}
   <Grid item xs={12} sm={6} md={4} sx={{ display: 'flex', justifyContent: { xs: 'flex-end', sm: 'center' } }}>
